@@ -70,8 +70,14 @@ void handle_input() {
         ++player_x;
     }
 
-    if ((pressed_key == 'w' || pressed_key == 'W') && can_move_to(player_y - 1, player_x)) {
-        --player_y;
+    if (pressed_key == 'w' || pressed_key == 'W') {
+        if (can_move_to(player_y - 1, player_x)) {
+            --player_y;
+        }
+
+        if (can_move_to(player_y - 1, player_x)) {
+            --player_y;
+        }
     }
 }
 

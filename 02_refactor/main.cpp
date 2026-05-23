@@ -3,105 +3,216 @@
 
 const int MAP_HEIGHT = 10;
 const int MAP_WIDTH = 30;
+const int FRAME_DELAY_MICROSECONDS = 80000;
+const int JUMP_HEIGHT = 2;
 
-char level_map[MAP_HEIGHT][MAP_WIDTH + 1] = {
-    "##############################",
-    "#                            #",
-    "#                            #",
-    "#                            #",
-    "#          ####              #",
-    "#                            #",
-    "#                            #",
-    "#                ####        #",
-    "#                            #",
-    "##############################"
+const char WALL_SYMBOL = '#';
+const char PLAYER_SYMBOL = '@';
+
+struct Position {
+    int x;
+    int y;
 };
 
-int player_x = 2;
-int player_y = 8;
+struct Level {
+    char tiles[MAP_HEIGHT][MAP_WIDTH + 1];
+};
 
-bool is_running = true;
+struct GameState {
+    Position player_position;
+    bool is_running;
+};
 
-void draw_game() {
-    clear();
+Level create_level() {
+    Level level = {
+        {
+            "##############################",
+            "#                            #",
+            "#                            #",
+            "#                            #",
+            "#          ####              #",
+            "#                            #",
+            "#                            #",
+            "#                ####        #",
+            "#                            #",
+            "##############################"
+        }
+    };
 
+    return level;
+}
+
+GameState create_initial_game_state() {
+    GameState game_state = {
+        {2, 8},
+        true
+    };
+
+    return game_state;
+}
+
+bool is_inside_level(const Position& position) {
+    return position.y >= 0
+        && position.y < MAP_HEIGHT
+        && position.x >= 0
+        && position.x < MAP_WIDTH;
+}
+
+bool is_wall_at(const Level& level, const Position& position) {
+    return level.tiles[position.y][position.x] == WALL_SYMBOL;
+}
+
+bool can_stand_at(const Level& level, const Position& position) {
+    return is_inside_level(position) && !is_wall_at(level, position);
+}
+
+Position get_shifted_position(
+    const Position& position,
+    int shift_x,
+    int shift_y
+) {
+    Position shifted_position = {
+        position.x + shift_x,
+        position.y + shift_y
+    };
+
+    return shifted_position;
+}
+
+void move_player_if_possible(
+    GameState& game_state,
+    const Level& level,
+    int shift_x,
+    int shift_y
+) {
+    Position next_position = get_shifted_position(
+        game_state.player_position,
+        shift_x,
+        shift_y
+    );
+
+    if (can_stand_at(level, next_position)) {
+        game_state.player_position = next_position;
+    }
+}
+
+void jump_player(GameState& game_state, const Level& level) {
+    for (int jump_step = 0; jump_step < JUMP_HEIGHT; ++jump_step) {
+        Position next_position = get_shifted_position(
+            game_state.player_position,
+            0,
+            -1
+        );
+
+        if (!can_stand_at(level, next_position)) {
+            return;
+        }
+
+        game_state.player_position = next_position;
+    }
+}
+
+void apply_gravity(GameState& game_state, const Level& level) {
+    move_player_if_possible(game_state, level, 0, 1);
+}
+
+void process_input(GameState& game_state, const Level& level) {
+    int pressed_key = getch();
+
+    switch (pressed_key) {
+        case 'a':
+        case 'A':
+            move_player_if_possible(game_state, level, -1, 0);
+            break;
+
+        case 'd':
+        case 'D':
+            move_player_if_possible(game_state, level, 1, 0);
+            break;
+
+        case 'w':
+        case 'W':
+            jump_player(game_state, level);
+            break;
+
+        case 'q':
+        case 'Q':
+            game_state.is_running = false;
+            break;
+
+        default:
+            break;
+    }
+}
+
+bool is_player_at_position(
+    const GameState& game_state,
+    int row,
+    int column
+) {
+    return game_state.player_position.y == row
+        && game_state.player_position.x == column;
+}
+
+void draw_level(const GameState& game_state, const Level& level) {
     for (int row = 0; row < MAP_HEIGHT; ++row) {
         for (int column = 0; column < MAP_WIDTH; ++column) {
-            if (row == player_y && column == player_x) {
-                printw("@");
+            if (is_player_at_position(game_state, row, column)) {
+                printw("%c", PLAYER_SYMBOL);
             } else {
-                printw("%c", level_map[row][column]);
+                printw("%c", level.tiles[row][column]);
             }
         }
 
         printw("\n");
     }
+}
 
-    printw("\nControls: A/D - move, W - jump, Q - quit\n");
+void draw_controls() {
+    printw("\nControls:\n");
+    printw("A / D - move left / right\n");
+    printw("W     - jump\n");
+    printw("Q     - quit\n");
+}
+
+void render_game(const GameState& game_state, const Level& level){
+    clear();
+
+    draw_level(game_state, level);
+    draw_controls();
 
     refresh();
 }
 
-bool can_move_to(int next_y, int next_x) {
-    if (next_y < 0 || next_y >= MAP_HEIGHT) {
-        return false;
-    }
-
-    if (next_x < 0 || next_x >= MAP_WIDTH) {
-        return false;
-    }
-
-    return level_map[next_y][next_x] != '#';
+void initialize_console() {
+    initscr();
+    noecho();
+    curs_set(0);
+    keypad(stdscr, TRUE);
+    nodelay(stdscr, TRUE);
 }
 
-void handle_input() {
-    int pressed_key = getch();
-
-    if (pressed_key == 'q' || pressed_key == 'Q') {
-        is_running = false;
-        return;
-    }
-
-    if ((pressed_key == 'a' || pressed_key == 'A') && can_move_to(player_y, player_x - 1)) {
-        --player_x;
-    }
-
-    if ((pressed_key == 'd' || pressed_key == 'D') && can_move_to(player_y, player_x + 1)) {
-        ++player_x;
-    }
-
-    if (pressed_key == 'w' || pressed_key == 'W') {
-        if (can_move_to(player_y - 1, player_x)) {
-            --player_y;
-        }
-
-        if (can_move_to(player_y - 1, player_x)) {
-            --player_y;
-        }
-    }
+void shutdown_console() {
+    endwin();
 }
 
-void apply_gravity() {
-    if (can_move_to(player_y + 1, player_x)) {
-        ++player_y;
+void run_game_loop(GameState& game_state, const Level& level) {
+    while (game_state.is_running) {
+        process_input(game_state, level);
+        apply_gravity(game_state, level);
+        render_game(game_state, level);
+
+        usleep(FRAME_DELAY_MICROSECONDS);
     }
 }
 
 int main() {
-    initscr();
-    noecho();
-    curs_set(0);
-    nodelay(stdscr, TRUE);
-    keypad(stdscr, TRUE);
+    Level level = create_level();
+    GameState game_state = create_initial_game_state();
 
-    while (is_running) {
-        handle_input();
-        apply_gravity();
-        draw_game();
-        usleep(80000);
-    }
-
-    endwin();
+    initialize_console();
+    run_game_loop(game_state, level);
+    shutdown_console();
 
     return 0;
 }
